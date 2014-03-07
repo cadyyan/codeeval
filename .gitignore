@@ -3,3 +3,7 @@
 
 *.pyc
 
+*.out
+
+input.txt
+
