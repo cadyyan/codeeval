@@ -6,15 +6,7 @@ import os
 import os.path
 import shutil
 
-if __name__ == '__main__':
-	parser = argparse.ArgumentParser(description = 'Create solution files for each language for a challenge')
-	parser.add_argument('challenge_id', type = int,
-						help = 'Challenge ID')
-	parser.add_argument('challenge_name', type = str,
-						help = 'Challenge name')
-
-	args = parser.parse_args()
-
+def create_challenge(args):
 	challenge_name = args.challenge_name.lower().replace(' ', '_')
 	filename_root  = '{0}_{1}'.format(args.challenge_id, challenge_name)
 
@@ -35,4 +27,18 @@ if __name__ == '__main__':
 			print 'Creating {0}...'.format(filename)
 
 			shutil.copyfile(template, filename)
+
+if __name__ == '__main__':
+	parser = argparse.ArgumentParser(description = 'Create solution files for each language for a challenge')
+	subparsers = parser.add_subparsers()
+
+	create_parser = subparsers.add_parser('create')
+	create_parser.add_argument('challenge_id', type = int,
+						help = 'Challenge ID')
+	create_parser.add_argument('challenge_name', type = str,
+						help = 'Challenge name')
+	create_parser.set_defaults(func = create_challenge)
+
+	args = parser.parse_args()
+	args.func(args)
 
