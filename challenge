@@ -1,10 +1,15 @@
 #!/usr/bin/env python
 
 import argparse
+import cookielib
 import glob
 import os
 import os.path
 import shutil
+import urllib
+import urllib2
+
+CODEEVAL_URL = 'https://www.codeeval.com'
 
 def create_challenge(args):
 	challenge_name = args.challenge_name.lower().replace(' ', '_')
@@ -28,6 +33,14 @@ def create_challenge(args):
 
 			shutil.copyfile(template, filename)
 
+def login(args):
+	policy     = cookielib.DefaultCookiePolicy(allowed_domains = [CODEEVAL_URL])
+	cookie_jar = cookielib.FileCookieJar('codeeval.cookie', policy = policy)
+	opener     = urllib2.build_opener(urllib2.HTTPCookieProcessor(cookie_jar))
+	data       = { 'username': args.username, 'password': args.password }
+
+	res = opener.open(CODEEVAL_URL + '/accounts/login', urllib.urlencode(data))
+
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description = 'Create solution files for each language for a challenge')
 	subparsers = parser.add_subparsers()
@@ -38,6 +51,11 @@ if __name__ == '__main__':
 	create_parser.add_argument('challenge_name', type = str,
 						help = 'Challenge name')
 	create_parser.set_defaults(func = create_challenge)
+
+	login_parser = subparsers.add_parser('login')
+	login_parser.add_argument('username', type = str)
+	login_parser.add_argument('password', type = str)
+	login_parser.set_defaults(func = login)
 
 	args = parser.parse_args()
 	args.func(args)
