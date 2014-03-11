@@ -14,7 +14,7 @@ int main(int argc, char **argv)
 	std::string sLine;
 	while (getline(fsInput, sLine))
 	{
-		if (sLine == "\n")
+		if (sLine.empty())
 			continue;
 
 		// TODO:
