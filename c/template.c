@@ -15,7 +15,7 @@ int main(int argc, char **argv)
 	char pcLine[1024];
 	while (fgets(pcLine, 1024, pfh) != NULL)
 	{
-		if (strcmp(pcLine, "\n"))
+		if (!strcmp(pcLine, "\n"))
 			continue;
 
 		// TODO:
