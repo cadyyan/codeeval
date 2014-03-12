@@ -1,17 +1,43 @@
 #!/usr/bin/env python
 
-# pylint: disable=C0111
-
 import argparse
 import cookielib
+import getpass
 import glob
 import os
 import os.path
+import re
+import requests
 import shutil
-import urllib
-import urllib2
 
-CODEEVAL_URL = 'https://www.codeeval.com'
+CODEEVAL_URL    = 'https://www.codeeval.com'
+COOKIE          = 'codeeval.cookie'
+COOKIE_JAR      = cookielib.LWPCookieJar(COOKIE)
+SESSION         = requests.session()
+SUPPORTED_LANGS = {
+	'py': 1,
+	'c': 2,
+	'cpp': 3,
+	'java': 4,
+	'rb': 5,
+	'pl': 6,
+	'php': 7,
+	'tcl': 8,
+	'clj': 9,
+	'js': 10,
+	'scala': 11,
+	'cs': 12,
+	'm': 13,
+	'py3': 14,
+	'hs': 15,
+	'go': 16,
+	'sh': 17,
+	'lua': 18,
+}
+
+if os.path.exists(COOKIE):
+	COOKIE_JAR.load()
+SESSION.cookies = COOKIE_JAR
 
 def setup_args_parser():
 	"""
@@ -29,12 +55,78 @@ def setup_args_parser():
 						help = 'Challenge name')
 	create_parser.set_defaults(func = create_challenge)
 
-	login_parser = subparsers.add_parser('login')
-	login_parser.add_argument('username', type = str)
-	login_parser.add_argument('password', type = str)
-	login_parser.set_defaults(func = login)
+	submit_parser = subparsers.add_parser('submit')
+	submit_parser.add_argument('file', type = str,
+						help = 'Source code file')
+	submit_parser.set_defaults(func = submit_challenge)
 
 	return parser.parse_args()
+
+def _send_request(url_part, method, data = None):
+	"""
+	Send a request. url_part is a small part of the URL that denotes the
+	relative path to the page. For example login's path part is
+	/accounts/login. data is any data that needs to be sent in the request.
+	"""
+
+	url = CODEEVAL_URL + url_part
+
+	headers = {
+		'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+		'Accept-Encoding': 'gzip,deflate,sdch',
+		'Accept-Language': 'en-US,en;q=0.8',
+		'Content-Type': 'application/x-www-form-urlencoded',
+		'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/33.0.1750.146 Safari/537.36',
+	}
+
+	method = method.lower()
+	res = getattr(SESSION, method)(url, data = data, headers = headers, stream = True, allow_redirects = True, verify = True)
+
+	SESSION.cookies.save()
+
+	if res.status_code != 200:
+		print 'HTTP request not OK: returned code {0}'.format(res.status_code)
+		exit(0)
+
+	return res
+
+def login():
+	"""
+	Handle logging into CodeEval
+	"""
+
+	username = raw_input('Username: ')
+	password = getpass.getpass('Password: ')
+
+	data = {
+		'username': username,
+		'password': password,
+		'rememberme': 'on',
+		'email_not_activated': 'email',
+		'next': None,
+	}
+
+	res = _send_request('/accounts/login', 'GET', data = data)
+
+	if res.url.startswith('https://www.codeeval.com/accounts/login'):
+		print 'Login failed'
+		exit(0)
+
+def login_required(func):
+	"""
+	Decorator for ensuring the user is logged in and if they aren't then
+	attempt to log them in.
+	"""
+
+	def wrapper(*args, **kwargs):
+		if os.path.exists(COOKIE) and _send_request('/dashboard', 'GET').url == 'https://www.codeeval.com/dashboard/':
+			return func(*args, **kwargs)
+
+		login()
+
+		return func(*args, **kwargs)
+
+	return wrapper
 
 def create_challenge(args):
 	"""
@@ -62,27 +154,33 @@ def create_challenge(args):
 
 			shutil.copyfile(template, filename)
 
-def login(args):
+@login_required
+def submit_challenge(args):
 	"""
-	Handle logging into CodeEval
+	Submit challenge file
 	"""
 
-	cookie     = 'codeeval.cookie'
-	policy     = cookielib.DefaultCookiePolicy(allowed_domains = ['www.codeeval.com'])
-	cookie_jar = cookielib.LWPCookieJar(cookie, policy = policy)
-	opener     = urllib2.build_opener(urllib2.HTTPCookieProcessor(cookie_jar))
-	data       = {
-		'username': args.username,
-		'password': args.password,
-		'email_not_activated': 'email',
-		'next': '',
+	if not os.path.exists(args.file):
+		print 'Source code does not exist'
+		return
+
+	if not re.search(r'(\d+_[\w_]+)\.\w+$', args.file):
+		print 'Filename does not match proper format of <challenge_id>_<name>'
+		return
+
+	extension = os.path.splitext(args.file)[1][1:]
+
+	with open(args.file, 'r') as file_handle:
+		src = file_handle.read()
+
+	data = {
+		'type': 'editor',
+		'srccode': src,
+		'solution': SUPPORTED_LANGS[extension],
 	}
 
-	if os.path.exists(cookie):
-		cookie_jar.load()
-
-	opener.open(CODEEVAL_URL + '/accounts/login', urllib.urlencode(data))
-	cookie_jar.save()
+	# TODO: build url
+	#_send_request(url, 'POST', data)
 
 def main():
 	"""
